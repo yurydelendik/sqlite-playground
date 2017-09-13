@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>SQLite3 playground</title>
+  <style>
+    div.input {
+      font-family: monospace;
+      border: 1px solid brown;
+      border-radius: 5px;
+      padding: 6px;
+      margin-bottom: 6px;
+    } 
+    table.output {
+      border: 1px solid blue;
+      border-radius: 5px;
+      padding: 6px;
+      margin-bottom: 6px;
+    }
+    div.error {
+      font-style: italic;
+      border: 1px solid red;
+      border-radius: 5px;
+      padding: 6px;
+      margin-bottom: 6px;
+    }
+    table.output td {
+      padding: 0;
+      margin: 0;
+      border-top: 1px solid black;
+    }
+    #exec {
+      border: 1px solid black;
+      background-color: black;
+      color: white;
+    }
+  </style>
+</head>
+<body>
+  <h1>SQLite3 playground</h1>
+
+  <div id="results"></div>
+  <div id="toolbar">
+    <input id="query">
+    <button id="exec" onclick="executeCommand(document.getElementById('query').value); document.getElementById('query').value = '';">Execute</button>
+  </div>
+
+  <script>
+    var commands = [
+      "CREATE TABLE t1(a INTEGER, b INTEGER, c VARCHAR(100));",
+      "INSERT INTO t1 VALUES(1,13153,'thirteen thousand one hundred fifty three');",
+      "INSERT INTO t1 VALUES(1,987,'some other number');",
+      "SELECT count(*) FROM t1;",
+      "SELECT a, b, c FROM t1;"
+    ];
+
+    function executeCommand(cmd) {
+      var div = document.createElement("div");
+      div.className = "input"
+      div.textContent = cmd;
+      document.getElementById("results").appendChild(div);
+
+      var table = null;
+      var callback = Runtime.addFunction(function (argc, argv, columns) {
+        var names = [], values = [];
+        for (var i = 0; i < argc; i++) {
+          values.push(Module.UTF8ToString(Module.getValue(argv + (i << 2), 'i32')));
+          names.push(Module.UTF8ToString(Module.getValue(columns + (i << 2), 'i32')));
+        }
+        if (!table) {
+          table = document.createElement("table");
+          table.className = "output";
+          var header = document.createElement("tr");
+          names.forEach(function (n) {
+            var th = document.createElement("th");
+            th.textContent = n;
+            header.appendChild(th);
+          });
+          table.appendChild(header);
+          document.getElementById("results").appendChild(table);
+        }
+        var row = document.createElement("tr");
+        values.forEach(function (val) {
+          var td = document.createElement("td");
+          td.textContent = val;
+          row.appendChild(td);
+        });
+        table.appendChild(row);
+      });
+
+      var result = Module.ccall('exec_cmd', 'number', ['number', 'string', 'number'], [db, cmd, callback]);
+      if (result) {
+        var err = document.createElement('div');
+        err.className = "error";
+        err.textContent = Module.UTF8ToString(Module.ccall('get_last_error', 'number', [], []));
+        document.getElementById("results").appendChild(err);
+      }
+
+      Runtime.removeFunction(callback);
+    }
+
+    var db;
+
+    function loaded() {
+      var buf = Module._malloc(8);
+      var result = Module.ccall('init_db', 'number', ['number'], [buf]);
+      if (result) {
+        throw new Error('Unable to initialize db: ' +
+          Module.UTF8ToString(Module.ccall('get_last_error', 'number', [], [])));
+      }
+      db = Module.getValue(buf, 'i32');
+      commands.forEach(executeCommand);
+      // Module.ccall('destroy_db', 'number', ['number'], [db]);
+    }
+
+    var Module = {
+      wasmBinaryFile: "../build/playground.wasm",
+      postRun: [loaded]
+    };
+  </script>
+  <script async type="text/javascript" src="../build/playground.js"></script>
+</body>
+</html>
