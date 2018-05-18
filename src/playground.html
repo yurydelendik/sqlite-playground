@@ -35,6 +35,7 @@
       color: white;
     }
   </style>
+  <script src="../misc/wasm.js"></script>
 </head>
 <body>
   <h1>SQLite3 playground</h1>
@@ -60,12 +61,13 @@
       div.textContent = cmd;
       document.getElementById("results").appendChild(div);
 
+      var mem = new DataView(WasmModule.exports.memory.buffer);
       var table = null;
-      var callback = Runtime.addFunction(function (argc, argv, columns) {
+      WasmModule_js_callback = function (argc, argv, columns) {
         var names = [], values = [];
         for (var i = 0; i < argc; i++) {
-          values.push(Module.UTF8ToString(Module.getValue(argv + (i << 2), 'i32')));
-          names.push(Module.UTF8ToString(Module.getValue(columns + (i << 2), 'i32')));
+          values.push(utf8ToString(mem.getInt32(argv + (i << 2), true)));
+          names.push(utf8ToString(mem.getInt32(columns + (i << 2), true)));
         }
         if (!table) {
           table = document.createElement("table");
@@ -86,38 +88,77 @@
           row.appendChild(td);
         });
         table.appendChild(row);
-      });
+      };
 
-      var result = Module.ccall('exec_cmd', 'number', ['number', 'string', 'number'], [db, cmd, callback]);
+      var cmd_ptr = stringToUtf8(cmd);
+      var result = WasmModule.exports.exec_cmd(db, cmd_ptr);
       if (result) {
         var err = document.createElement('div');
         err.className = "error";
-        err.textContent = Module.UTF8ToString(Module.ccall('get_last_error', 'number', [], []));
+        err.textContent = utf8ToString(WasmModule.exports.get_last_error());
         document.getElementById("results").appendChild(err);
       }
 
-      Runtime.removeFunction(callback);
+      WasmModule.exports.free_mem(cmd_ptr);
+      WasmModule_js_callback = fail;
     }
 
     var db;
 
-    function loaded() {
-      var buf = Module._malloc(8);
-      var result = Module.ccall('init_db', 'number', ['number'], [buf]);
-      if (result) {
-        throw new Error('Unable to initialize db: ' +
-          Module.UTF8ToString(Module.ccall('get_last_error', 'number', [], [])));
-      }
-      db = Module.getValue(buf, 'i32');
-      commands.forEach(executeCommand);
-      // Module.ccall('destroy_db', 'number', ['number'], [db]);
+    function utf8ToString(p) {
+      var buf = new Uint8Array(WasmModule.exports.memory.buffer);
+      var end = p;
+      while (buf[end]) end++;
+      return new TextDecoder("utf-8").decode(buf.subarray(p, end));
     }
 
-    var Module = {
-      wasmBinaryFile: "../build/playground.wasm",
-      postRun: [loaded]
+    function stringToUtf8(s) {
+      var buf = new TextEncoder("utf-8").encode(s);
+      var p = WasmModule.exports.alloc_mem(buf.byteLength + 1);
+      var mem = new Uint8Array(WasmModule.exports.memory.buffer);
+      mem.set(buf, p);
+      mem[p + buf.byteLength] = 0;
+      return p; 
+    }
+
+    function loaded() {
+      var buf = WasmModule.exports.alloc_mem(8);
+      var result = WasmModule.exports.init_db(buf);
+      if (result) {
+        throw new Error('Unable to initialize db: ' +
+          utf8ToString(WasmModule.exports.get_last_error()));
+      }
+      db = new DataView(WasmModule.exports.memory.buffer).getInt32(buf, true);
+      commands.forEach(executeCommand);
+      // WasmModule.exports.destroy_db(db);
+    }
+
+    function fail() {
+      console.log(arguments);
+      debugger;
+      throw new Error();
+    }
+
+    WasmModule_js_callback = fail;
+    var playground_ffi = {
+      ...ffi,
+      env: {
+        ...ffi.env,
+        js_callback(argc, argv, columns) {
+          return WasmModule_js_callback(argc, argv, columns);
+        },
+      },
     };
+
+    var WasmModule;
+    // var WasmPath = "../build/t.php";
+    var WasmPath = "../build/playground.prod.wasm";
+    WebAssembly.instantiateStreaming(fetch(WasmPath), playground_ffi)
+      .then(({instance}) => {
+        WasmModule = instance;
+        setHeap(instance.exports.memory);
+        loaded();
+      });
   </script>
-  <script async type="text/javascript" src="../build/playground.js"></script>
 </body>
 </html>
