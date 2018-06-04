@@ -2,7 +2,7 @@ WASMCEPTION ?= /Users/yury/llvmwasm/inception
 WASM_DWARF ?= wasm-dwarf
 PUBLISH_URL ?= https://yurydelendik.github.io/sqlite-playground/
 CUR_DIR = $(shell pwd)
-WASM_DWARF_CMD = $(WASM_DWARF) -s --prefix $(HOME)/=wasm-src:///
+WASM_SOURCEMAP ?= ./wasm-sourcemap.py -s --prefix $(HOME)/=wasm-src:///
 LLVM = $(WASMCEPTION)/dist/bin/clang \
   -Imisc/ \
   --target=wasm32-unknown-unknown-wasm \
@@ -29,8 +29,9 @@ build/playground.wasm: build/playground.o build/sqlite3.o
 	mkdir -p build/misc; cp misc/sqlite3.c misc/sqlite3.h build/misc/
 
 build/playground.wasm.map: build/playground.wasm
-	$(WASM_DWARF_CMD) build/playground.wasm -o build/playground.wasm.map \
-	  -w build/playground.prod.wasm -x --source-map=$(PUBLISH_URL)build/playground.wasm.map
+	$(WASM_SOURCEMAP) \
+	 -x -m $(PUBLISH_URL)/build/playground.wasm.map -w build/playground.prod.wasm \
+	 build/playground.wasm build/playground.wasm.map
 
 clean:
 	-rm build/playground.* build/sqlite3.*
