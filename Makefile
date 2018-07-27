@@ -7,8 +7,15 @@ LLVM = $(WASMCEPTION)/dist/bin/clang \
   -Imisc/ \
   --target=wasm32-unknown-unknown-wasm \
   --sysroot $(WASMCEPTION)/sysroot \
-  -Wl,--allow-undefined-file=src/playground.syms \
   -nostartfiles -O2 -v -g
+EXPORTS = \
+  alloc_mem \
+  free_mem \
+  init_db \
+  destroy_db \
+  exec_cmd \
+  get_last_error \
+  $(NULL)
 
 build: build/playground.wasm build/playground.wasm.map
 
@@ -22,8 +29,11 @@ build/sqlite3.o: misc/sqlite3.c misc/sqlite3.h Makefile
 	mkdir -p build/
 	$(LLVM) $(CUR_DIR)/misc/sqlite3.c -c -o build/sqlite3.o
 
+LINKER_PREFIX := -Wl,
 build/playground.wasm: build/playground.o build/sqlite3.o
-	$(LLVM) build/playground.o build/sqlite3.o -o build/playground.wasm
+	$(LLVM) build/playground.o build/sqlite3.o -o build/playground.wasm \
+	  $(LINKER_PREFIX)--no-entry,--no-threads,--allow-undefined-file=src/playground.syms \
+	  $(patsubst %,$(LINKER_PREFIX)--export=%,$(EXPORTS))
 	# Make sources available for debugger
 	mkdir -p build/src; cp src/playground.c build/src/
 	mkdir -p build/misc; cp misc/sqlite3.c misc/sqlite3.h build/misc/
