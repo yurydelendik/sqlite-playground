@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>SQLite3 playground (JS)</title>
+  <style>
+    div.input {
+      font-family: monospace;
+      border: 1px solid brown;
+      border-radius: 5px;
+      padding: 6px;
+      margin-bottom: 6px;
+    } 
+    table.output {
+      border: 1px solid blue;
+      border-radius: 5px;
+      padding: 6px;
+      margin-bottom: 6px;
+    }
+    div.error {
+      font-style: italic;
+      border: 1px solid red;
+      border-radius: 5px;
+      padding: 6px;
+      margin-bottom: 6px;
+    }
+    table.output td {
+      padding: 0;
+      margin: 0;
+      border-top: 1px solid black;
+    }
+    #exec {
+      border: 1px solid black;
+      background-color: black;
+      color: white;
+    }
+  </style>
+  <script src="../misc/wasm.js"></script>
+  <script>
+  window.env = {
+    abort() { throw new Error('abort'); },
+    ...ffi.env,
+    js_callback(argc, argv, columns) {
+      return WasmModule_js_callback(argc, argv, columns);
+    },
+  };
+  </script>
+  <script src="../build/playground.js"></script>
+</head>
+<body>
+  <h1>SQLite3 playground</h1>
+
+  <div id="results"></div>
+  <div id="toolbar">
+    <input id="query">
+    <button id="exec" onclick="executeCommand(document.getElementById('query').value); document.getElementById('query').value = '';">Execute</button>
+  </div>
+
+  <script>
+    var commands = [
+      "CREATE TABLE t1(a INTEGER, b INTEGER, c VARCHAR(100));",
+      "INSERT INTO t1 VALUES(1,13153,'thirteen thousand one hundred fifty three');",
+      "INSERT INTO t1 VALUES(1,987,'some other number');",
+      "SELECT count(*) FROM t1;",
+      "SELECT a, b, c FROM t1;"
+    ];
+
+    function executeCommand(cmd) {
+      var div = document.createElement("div");
+      div.className = "input"
+      div.textContent = cmd;
+      document.getElementById("results").appendChild(div);
+
+      var mem = new DataView(WasmModule.exports.memory.buffer);
+      var table = null;
+      WasmModule_js_callback = function (argc, argv, columns) {
+        var names = [], values = [];
+        for (var i = 0; i < argc; i++) {
+          values.push(utf8ToString(mem.getInt32(argv + (i << 2), true)));
+          names.push(utf8ToString(mem.getInt32(columns + (i << 2), true)));
+        }
+        if (!table) {
+          table = document.createElement("table");
+          table.className = "output";
+          var header = document.createElement("tr");
+          names.forEach(function (n) {
+            var th = document.createElement("th");
+            th.textContent = n;
+            header.appendChild(th);
+          });
+          table.appendChild(header);
+          document.getElementById("results").appendChild(table);
+        }
+        var row = document.createElement("tr");
+        values.forEach(function (val) {
+          var td = document.createElement("td");
+          td.textContent = val;
+          row.appendChild(td);
+        });
+        table.appendChild(row);
+      };
+
+      var cmd_ptr = stringToUtf8(cmd);
+      var result = WasmModule.exports.exec_cmd(db, cmd_ptr);
+      if (result) {
+        var err = document.createElement('div');
+        err.className = "error";
+        err.textContent = utf8ToString(WasmModule.exports.get_last_error());
+        document.getElementById("results").appendChild(err);
+      }
+
+      WasmModule.exports.free_mem(cmd_ptr);
+      WasmModule_js_callback = fail;
+    }
+
+    var db;
+
+    function utf8ToString(p) {
+      var buf = new Uint8Array(WasmModule.exports.memory.buffer);
+      var end = p;
+      while (buf[end]) end++;
+      return new TextDecoder("utf-8").decode(buf.subarray(p, end));
+    }
+
+    function stringToUtf8(s) {
+      var buf = new TextEncoder("utf-8").encode(s);
+      var p = WasmModule.exports.alloc_mem(buf.byteLength + 1);
+      var mem = new Uint8Array(WasmModule.exports.memory.buffer);
+      mem.set(buf, p);
+      mem[p + buf.byteLength] = 0;
+      return p; 
+    }
+
+    function loaded() {
+      var buf = WasmModule.exports.alloc_mem(8);
+      var result = WasmModule.exports.init_db(buf);
+      if (result) {
+        throw new Error('Unable to initialize db: ' +
+          utf8ToString(WasmModule.exports.get_last_error()));
+      }
+      db = new DataView(WasmModule.exports.memory.buffer).getInt32(buf, true);
+      commands.forEach(executeCommand);
+      // WasmModule.exports.destroy_db(db);
+    }
+
+    function fail() {
+      console.log(arguments);
+      debugger;
+      throw new Error();
+    }
+
+    var WasmModule_js_callback = fail;
+    var WasmModule = {
+        exports: window.sqliteplayground,
+    };
+    setHeap(WasmModule.exports.memory);
+
+    loaded();
+  </script>
+</body>
+</html>

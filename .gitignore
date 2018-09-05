@@ -1,0 +1,5 @@
+build/*.o
+build/t.php
+build/playground.jsm*
+node_modules/
+package-lock.json
