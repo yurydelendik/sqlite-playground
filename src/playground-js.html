@@ -37,13 +37,11 @@
   </style>
   <script src="../misc/wasm.js"></script>
   <script>
-  window.env = {
-    abort() { throw new Error('abort'); },
-    ...ffi.env,
-    js_callback(argc, argv, columns) {
+    var env = Object.create(ffi.env);
+    env.abort = function () { throw new Error('abort'); };
+    env.js_callback = function (argc, argv, columns) {
       return WasmModule_js_callback(argc, argv, columns);
-    },
-  };
+    };
   </script>
   <script src="../build/playground.js"></script>
 </head>

@@ -55,7 +55,7 @@ build/playground.js: build/playground.wasm build/playground.wasm.map
 		-o build/playground.jsm \
 		-osm build/playground.jsm.map \
 		-osu playground.jsm.map
-	node --max-old-space-size=8192 ./node_modules/.bin/babel \
+	node --max-old-space-size=16384 ./node_modules/.bin/babel \
 	  --plugins @babel/transform-modules-umd build/playground.jsm \
 		-o build/playground.js -s true --module-id sqliteplayground
 	node -e "const fs=require('fs'); \
