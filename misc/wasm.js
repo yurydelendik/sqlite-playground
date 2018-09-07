@@ -27,7 +27,8 @@
 const PAGE_SIZE = (64 * 1024);
 var heap_size_bytes = 16 * 1024 * 1024;
 var heap_size_pages = heap_size_bytes / PAGE_SIZE;
-var memory = new WebAssembly.Memory({initial: heap_size_pages, maximum: heap_size_pages})
+var memory = typeof WebAssembly !== 'undefined' ?
+  new WebAssembly.Memory({initial: heap_size_pages, maximum: heap_size_pages}) : null;
 var heap;
 var heap_end;
 var heap_uint8;
@@ -56,11 +57,14 @@ function setHeap(m) {
   heap_size_bytes = heap.byteLength;
 }
 
-setHeap(memory)
+if (memory) {
+  setHeap(memory);
+}
 
 // Heap access helpers.
 function charFromHeap(ptr) { return String.fromCharCode(heap_uint8[ptr]); }
-function stringFromHeap(ptr, len = -1) {
+function stringFromHeap(ptr, len) {
+  if (typeof len == 'undefined') len = -1;
   var str = '';
   var end = heap_size_bytes;
   if (len != -1)
@@ -1394,12 +1398,12 @@ function syscall_impl(n) {
   var syscall_args =  Array.from(arguments).slice(1);
   if (n == syscall_numbers["SYS_writev"]) {
     if (syscall_args[0] == 1) {
-      return syscall_writev(...syscall_args)
+      return syscall_writev.apply(null, syscall_args);
     }
   } else if (n == syscall_numbers["SYS_brk"]) {
-    return syscall_brk(...syscall_args)
+    return syscall_brk.apply(null, syscall_args);
   } else if (n == syscall_numbers["SYS_mmap2"]) {
-    return syscall_mmap2(...syscall_args)
+    return syscall_mmap2.apply(null, syscall_args);
   }
 
   // For other syscalls we trace that args and then either return 0 (ignore
