@@ -1395,7 +1395,7 @@ function syscall_mmap2(_, requested) {
 
 function syscall_impl(n) {
   // Special case for writev(stdout), essentially allowing printf to work
-  var syscall_args =  Array.from(arguments).slice(1);
+  var syscall_args = Array.prototype.slice.call(arguments, 1);
   if (n == syscall_numbers["SYS_writev"]) {
     if (syscall_args[0] == 1) {
       return syscall_writev.apply(null, syscall_args);
