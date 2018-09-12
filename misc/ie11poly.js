@@ -31,3 +31,26 @@ if (!Math.imul) {
     return ((aLo * bLo) + (((aHi * bLo + aLo * bHi) << 16) >>> 0) | 0);
   };
 }
+if (!window.TextDecoder) {
+  window.TextDecoder = function (encoding) {
+    if (encoding != "utf-8") throw new Error("unsupported");
+    return {
+      decode: function(buf) {
+        var data = String.fromCharCode.apply(null, buf);
+        return decodeURIComponent(escape(data));
+      }
+    };
+  };
+  window.TextEncoder = function (encoding) {
+    if (encoding != "utf-8") throw new Error("unsupported");
+    return {
+      encode: function(str) {
+        var data = unescape(encodeURIComponent(str));
+        var result = new Uint8Array(data.length);
+        for (var i = 0; i < data.length; i++)
+          result[i] = data.charCodeAt(i);
+        return result;
+      }
+    };
+  };
+}
