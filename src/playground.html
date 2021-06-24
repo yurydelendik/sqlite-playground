@@ -153,9 +153,11 @@
     var WasmModule;
     // var WasmPath = "../build/t.php";
     var WasmPath = "../build/playground.prod.wasm";
+    console.time("instantiate");
     WebAssembly.instantiateStreaming(fetch(WasmPath), playground_ffi)
       .then(({instance}) => {
         WasmModule = instance;
+        console.timeEnd("instantiate");
         setHeap(instance.exports.memory);
         loaded();
       });
